@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration status="OFF" >
+	<properties>
+		<property name="log_home">log/</property>
+	</properties>
+	<appenders>
+		<console name="console" target="SYSTEM_OUT">
+			<patternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+		</console>
+		<file name="file" fileName="logs/logs.log">
+			<patternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+		</file>
+	</appenders>
+	<loggers>
+		<!-- <logger name="com.webapp" level="debug" >
+			<appender-ref ref="file"/>
+		</logger> -->
+		<root level="info">
+			<appender-ref ref="console"/>
+		</root>
+	</loggers>
+</configuration>
+

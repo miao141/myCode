@@ -1,0 +1,558 @@
+/*
+ * Decompiled with CFR 0_115.
+ * 
+ * Could not load the following classes:
+ *  com.webapp.utils.builder.TableBuilder
+ *  com.webapp.utils.builder.TableBuilder$CMT
+ *  com.webapp.utils.config.PathUtils
+ *  com.webapp.utils.string.Utils
+ *  org.apache.commons.io.IOUtils
+ *  org.apache.commons.lang3.StringUtils
+ *  org.nutz.dao.entity.annotation.ColType
+ *  org.slf4j.Logger
+ *  org.slf4j.LoggerFactory
+ */
+package com.webapp.utils.mybatis;
+
+import com.webapp.utils.builder.TableBuilder;
+import com.webapp.utils.config.PathUtils;
+import com.webapp.utils.string.Utils;
+
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.nutz.dao.entity.annotation.ColType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class ClassBuilder<T> {
+    private static final Logger logger = LoggerFactory.getLogger((Class)ClassBuilder.class);
+    private static final String DEF_PKG = "com.webapp.table";
+    private Class<T> clz;
+    private TableRule tableRule;
+
+    public ClassBuilder(Class<T> clz) {
+        this.tableRule = new TableRule(clz);
+        this.tableRule.setSnakeMap(TableBuilder.isSnake());
+        this.tableRule.setComment(TableBuilder.getComment());
+        this.tableRule.setAllNull(TableBuilder.isAllNull());
+        this.clz = clz;
+    }
+
+    public ClassBuilder<T> table(String table) {
+        this.tableRule.setTableName(table);
+        return this;
+    }
+
+    public ClassBuilder<T> id(String col) {
+        this.tableRule.setTableId(col);
+        return this;
+    }
+
+    public /* varargs */ ClassBuilder<T> unique(String ... col) {
+        this.tableRule.setUniqueCol(Arrays.asList(col));
+        return this;
+    }
+
+    public /* varargs */ ClassBuilder<T> notNull(String ... col) {
+        this.tableRule.addNotNull(Arrays.asList(col));
+        return this;
+    }
+
+    public ClassBuilder<T> camel() {
+        this.tableRule.setSnakeMap(false);
+        return this;
+    }
+
+    public ClassBuilder<T> snake() {
+        this.tableRule.setSnakeMap(true);
+        return this;
+    }
+
+    public ClassBuilder<T> width(String col, int width) {
+        this.tableRule.addColWidth(col, width);
+        return this;
+    }
+
+    public ClassBuilder<T> width(Map<String, Integer> cloWidth) {
+        this.tableRule.addColWidth(cloWidth);
+        return this;
+    }
+
+    public ClassBuilder<T> precision(String col, int precision) {
+        this.tableRule.addPrecision(col, precision);
+        return this;
+    }
+
+    public ClassBuilder<T> precision(Map<String, Integer> precision) {
+        this.tableRule.addPrecision(precision);
+        return this;
+    }
+
+    public ClassBuilder<T> defVal(String col, String val) {
+        this.tableRule.addDefVal(col, val);
+        return this;
+    }
+
+    public ClassBuilder<T> defVal(Map<String, String> defVal) {
+        this.tableRule.setDefVal(defVal);
+        return this;
+    }
+
+    public ClassBuilder<T> comment(TableBuilder.CMT cmt) {
+        this.tableRule.setComment(cmt.getIndex());
+        return this;
+    }
+
+    public ClassBuilder<T> type(String col, String type) {
+        this.tableRule.addColType(col, type);
+        return this;
+    }
+
+    public /* varargs */ ClassBuilder<T> timestamp(String ... cols) {
+        Arrays.asList(cols).forEach(col -> {
+            this.tableRule.addColType(col, "TIMESTAMP");
+        }
+        );
+        return this;
+    }
+
+    private static List<String> modelLines(Class<?> clz) {
+        List lines = new ArrayList<String>();
+        String curPath = StringUtils.substringBefore((String)PathUtils.getCurPath(clz), (String)"target");
+        try {
+            String path = curPath + "src\\main\\java\\" + clz.getName().replace(".", "\\") + ".java";
+            FileInputStream is = new FileInputStream(path);
+            lines = IOUtils.readLines((InputStream)is, (String)"utf-8");
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+        return lines;
+    }
+
+    private String createClz() {
+        HashMap<String, String> ipt = new HashMap<String, String>();
+        StringBuffer topStr = new StringBuffer();
+        StringBuffer clzStr = new StringBuffer();
+        StringBuffer getset = new StringBuffer();
+        String name = this.clz.getSimpleName();
+        topStr.append("package " + this.tableRule.getPkg() + ";").append("\n");
+        topStr.append("import org.nutz.dao.entity.annotation.*;").append("\n");
+        clzStr.append("@Table(\"" + this.tableRule.getTableName() + "\")").append("\n");
+        List<String> uniqueCol = this.tableRule.getUniqueCol();
+        if (uniqueCol.size() > 0) {
+            clzStr.append("@TableIndexes({");
+            uniqueCol.forEach(x -> {
+                clzStr.append("\t").append("@Index(name=\"" + x + "\",unique=true,fields={\"" + x + "\"})").append("\n");
+            }
+            );
+            clzStr.append("})");
+        }
+        clzStr.append("public class " + name + "{").append("\n");
+        Field[] fields = ClassBuilder.getAllField(this.clz);
+        List<String> lines = ClassBuilder.modelLines(this.clz);
+        int size = lines.size();
+        for (Field field : fields) {
+            String col = field.getName();
+            String type = field.getType().getSimpleName();
+            String typePkg = field.getType().getName();
+            String fieldComm = "";
+            String cp = type + " " + col + ";";
+            for (int i = size - 1; i > 0; --i) {
+                String line = lines.get(i);
+                if (!line.contains(cp)) continue;
+                if (this.tableRule.getComment() == 1) {
+                    fieldComm = lines.get(i - 1).replace("//", "");
+                } else if (this.tableRule.getComment() == 2) {
+                    fieldComm = StringUtils.substringAfter((String)line, (String)"//");
+                }
+                fieldComm = StringUtils.trim((String)fieldComm);
+                if (!fieldComm.equalsIgnoreCase("TIMESTAMP")) break;
+                this.tableRule.addColType(col, "TIMESTAMP");
+                break;
+            }
+            if (!typePkg.startsWith("java.lang") && typePkg.contains(".")) {
+                ipt.put(type, typePkg);
+            }
+            if (col.equals(this.tableRule.getTableId())) {
+                clzStr.append("\t").append("@Id").append("\n");
+            }
+            if (this.tableRule.isSnakeMap()) {
+                clzStr.append("\t").append("@Column(hump = true)").append("\n");
+            }
+            if (this.tableRule.getDefVal().containsKey(col)) {
+                String val = this.tableRule.getDefVal().get(col);
+                clzStr.append("\t").append("@Default(value = \"" + val + "\")").append("\n");
+            }
+            ColDefineRule cr = this.tableRule.getColRule().get(col);
+            String colDefine = "";
+            if (StringUtils.isNoneBlank((CharSequence[])new CharSequence[]{cr.getCustomType()})) {
+                colDefine = colDefine + "customType=\"" + cr.getCustomType() + "\"";
+            } else if (cr.getType() != null) {
+                colDefine = colDefine + "type=ColType." + (Object)cr.getType();
+                if (cr.getWidth() != 0) {
+                    colDefine = colDefine + ",width=" + cr.getWidth();
+                }
+                if (cr.getPrecision() != 0) {
+                    colDefine = colDefine + ",precision=" + cr.getPrecision();
+                }
+            }
+            if (this.tableRule.isAllNull()) {
+                if (cr.getNotNull() == null || cr.getNotNull().equals(false)) {
+                    colDefine = colDefine + ",notNull=false";
+                } else if (cr.getNotNull().equals(true)) {
+                    colDefine = colDefine + ",notNull=true";
+                }
+            } else if (cr.getIsNull() == null || cr.getIsNull().equals(false)) {
+                colDefine = colDefine + ",notNull=true";
+            } else if (cr.getIsNull().equals(true)) {
+                colDefine = colDefine + ",notNull=false";
+            }
+            if (StringUtils.isNotEmpty((CharSequence)colDefine)) {
+                colDefine = "@ColDefine(" + colDefine + ")";
+                clzStr.append("\t").append(colDefine).append("\n");
+            }
+            if (StringUtils.isNotEmpty((CharSequence)fieldComm)) {
+                String comment = "@Comment(\"" + fieldComm + "\")";
+                clzStr.append("\t").append(comment).append("\n");
+            }
+            clzStr.append("\t").append("private " + type + " " + col + ";").append("\n");
+            getset.append("\t").append("public " + type + " get" + Utils.toPascal((String)col) + "(){").append("\n");
+            getset.append("\t").append("\treturn " + col + ";").append("\n");
+            getset.append("\t").append("}").append("\n");
+            getset.append("\t").append("public void set" + Utils.toPascal((String)col) + "(" + type + " " + col + "){").append("\n");
+            getset.append("\t").append("\tthis." + col + " = " + col + ";").append("\n");
+            getset.append("\t").append("}").append("\n");
+        }
+        if (this.tableRule.isHasGetSet()) {
+            clzStr.append(getset);
+        }
+        clzStr.append("}");
+        ipt.forEach((k, v) -> {
+            topStr.append("import " + v + ";").append("\n");
+        }
+        );
+        String result = topStr.append(clzStr).toString();
+        return result;
+    }
+
+    public void done(String jdbcCfg) {
+        String clzStr = this.createClz();
+        TableBuilder.build((String)jdbcCfg, (String)clzStr, (String)this.tableRule.getPkg(), (String)this.tableRule.getClzName());
+    }
+
+    public void done() {
+        if (StringUtils.isBlank((CharSequence)TableBuilder.getJdbcCfg())) {
+            logger.error("jdbcCfg is null, please set by TableBuilder.setJdbcCfg() or done(String jdbcCfg)");
+        }
+        this.done(TableBuilder.getJdbcCfg());
+    }
+
+    public void view() {
+        String clzStr = this.createClz();
+        logger.info("\n" + clzStr);
+    }
+
+    private static <T> Field[] getAllField(Class<T> clz) {
+        ArrayList<Field> fieldList = new ArrayList<Field>();
+        Class<T> superclz = (Class<T>) clz.getSuperclass();
+        if (superclz != null) {
+            fieldList.addAll(Arrays.asList(superclz.getDeclaredFields()));
+        }
+        fieldList.addAll(Arrays.asList(clz.getDeclaredFields()));
+        Field[] fields = fieldList.toArray(new Field[0]);
+        return fields;
+    }
+
+    private static Map<String, ColDefineRule> getColRuleMap(Field[] fields) {
+        HashMap<String, ColDefineRule> colRule = new HashMap<String, ColDefineRule>();
+        for (Field field : fields) {
+            String col = field.getName();
+            String type = field.getType().getSimpleName();
+            if (type.equals(String.class.getSimpleName())) {
+                colRule.put(col, new ColDefineRule(ColType.VARCHAR, 255, 0));
+                continue;
+            }
+            if (type.equals(Integer.class.getSimpleName()) || type.equals("int")) {
+                colRule.put(col, new ColDefineRule("int", 11, 0));
+                continue;
+            }
+            if (type.equalsIgnoreCase(Long.class.getSimpleName())) {
+                colRule.put(col, new ColDefineRule("bigint", 20, 0));
+                continue;
+            }
+            if (type.equalsIgnoreCase(Double.class.getSimpleName())) {
+                colRule.put(col, new ColDefineRule("decimal", TableBuilder.getDeciLength(), TableBuilder.getDeciPrecision()));
+                continue;
+            }
+            if (type.equals(Date.class.getSimpleName())) {
+                colRule.put(col, new ColDefineRule(ColType.DATETIME, 0, 0));
+                continue;
+            }
+            colRule.put(col, new ColDefineRule("varchar", 255, 0));
+        }
+        return colRule;
+    }
+
+    private static class ColDefineRule {
+        private ColType type;
+        private int width;
+        private int precision;
+        private Boolean notNull;
+        private Boolean isNull;
+        private String customType;
+
+        public ColDefineRule(ColType type, int width, int precision) {
+            this.type = type;
+            this.width = width;
+            this.precision = precision;
+            this.notNull = null;
+            this.isNull = null;
+        }
+
+        public ColDefineRule(String customType, int width, int precision) {
+            this.customType = width != 0 && precision != 0 ? customType + "(" + width + "," + precision + ")" : (width != 0 && precision == 0 ? customType + "(" + width + ")" : customType);
+            this.width = width;
+            this.precision = precision;
+            this.notNull = null;
+            this.isNull = null;
+        }
+
+        public ColType getType() {
+            return this.type;
+        }
+
+        public void setType(ColType type) {
+            this.type = type;
+        }
+
+        public int getWidth() {
+            return this.width;
+        }
+
+        public void setWidth(int width) {
+            this.width = width;
+        }
+
+        public int getPrecision() {
+            return this.precision;
+        }
+
+        public void setPrecision(int precision) {
+            this.precision = precision;
+        }
+
+        public Boolean getNotNull() {
+            return this.notNull;
+        }
+
+        public void setNotNull(Boolean notNull) {
+            this.notNull = notNull;
+        }
+
+        public Boolean getIsNull() {
+            return this.isNull;
+        }
+
+        public void setIsNull(Boolean isNull) {
+            this.isNull = isNull;
+        }
+
+        public String getCustomType() {
+            return this.customType;
+        }
+
+        public void setCustomType(String customType) {
+            this.customType = customType;
+        }
+    }
+
+    private static class TableRule {
+        private String tableName;
+        private Field[] field;
+        private String clzName;
+        private String pkg;
+        private int comment;
+        private String tableId;
+        private boolean snakeMap;
+        private boolean allNull;
+        private List<String> uniqueCol = new ArrayList<String>();
+        private Map<String, String> defVal = new HashMap<String, String>();
+        private Map<String, ColDefineRule> colRule = new HashMap<String, ColDefineRule>();
+        private boolean hasGetSet;
+
+        public void addDefVal(String col, String val) {
+            this.defVal.put(Utils.toCamel((String)col), val);
+        }
+
+        public void addPrecision(Map<String, Integer> precision) {
+            precision.forEach((col, ps) -> {
+                this.colRule.get(Utils.toCamel((String)col)).setPrecision(ps);
+            }
+            );
+        }
+
+        public void addPrecision(String col, int precision) {
+            this.colRule.forEach((colDef, colRule) -> {
+                if (Utils.toCamel((String)col).equals(colDef)) {
+                    colRule.setPrecision(precision);
+                }
+            }
+            );
+        }
+
+        public void addColWidth(String col, int width) {
+            this.colRule.forEach((colDef, colRule) -> {
+                if (Utils.toCamel((String)col).equals(colDef)) {
+                    colRule.setWidth(width);
+                }
+            }
+            );
+        }
+
+        public void addColType(String col, String type) {
+            this.colRule.forEach((colDef, colRule) -> {
+                if (Utils.toCamel((String)col).equals(colDef)) {
+                    colRule.setCustomType(type);
+                }
+            }
+            );
+        }
+
+        public void addColWidth(Map<String, Integer> cloWidth) {
+            cloWidth.forEach((col, width) -> {
+                this.colRule.get(Utils.toCamel((String)col)).setWidth(width);
+            }
+            );
+        }
+
+        public void addNotNull(List<String> notNull) {
+            notNull.forEach(col -> {
+                this.colRule.get(Utils.toCamel((String)col)).setNotNull(true);
+            }
+            );
+        }
+
+        public <T> TableRule(Class<T> clz) {
+            this.setField(ClassBuilder.getAllField(clz));
+            this.setTableId("id");
+            this.setSnakeMap(true);
+            this.setAllNull(false);
+            this.setHasGetSet(false);
+            this.setPkg("com.webapp.table");
+            this.setTableName(Utils.toSnake((String)clz.getSimpleName()));
+            this.setClzName(clz.getSimpleName());
+            this.setColRule(ClassBuilder.getColRuleMap(this.getField()));
+        }
+
+        public String getTableName() {
+            return this.tableName;
+        }
+
+        public void setTableName(String tableName) {
+            this.tableName = tableName;
+        }
+
+        public Field[] getField() {
+            return this.field;
+        }
+
+        public void setField(Field[] field) {
+            this.field = field;
+        }
+
+        public String getClzName() {
+            return this.clzName;
+        }
+
+        public void setClzName(String clzName) {
+            this.clzName = clzName;
+        }
+
+        public String getPkg() {
+            return this.pkg;
+        }
+
+        public void setPkg(String pkg) {
+            this.pkg = pkg;
+        }
+
+        public int getComment() {
+            return this.comment;
+        }
+
+        public void setComment(int comment) {
+            this.comment = comment;
+        }
+
+        public String getTableId() {
+            return this.tableId;
+        }
+
+        public void setTableId(String tableId) {
+            this.tableId = tableId;
+        }
+
+        public List<String> getUniqueCol() {
+            return this.uniqueCol;
+        }
+
+        public void setUniqueCol(List<String> uniqueCol) {
+            this.uniqueCol = uniqueCol;
+        }
+
+        public boolean isSnakeMap() {
+            return this.snakeMap;
+        }
+
+        public void setSnakeMap(boolean snakeMap) {
+            this.snakeMap = snakeMap;
+        }
+
+        public boolean isAllNull() {
+            return this.allNull;
+        }
+
+        public void setAllNull(boolean allNull) {
+            this.allNull = allNull;
+        }
+
+        public Map<String, String> getDefVal() {
+            return this.defVal;
+        }
+
+        public void setDefVal(Map<String, String> defVal) {
+            this.defVal = defVal;
+        }
+
+        public boolean isHasGetSet() {
+            return this.hasGetSet;
+        }
+
+        public void setHasGetSet(boolean hasGetSet) {
+            this.hasGetSet = hasGetSet;
+        }
+
+        public Map<String, ColDefineRule> getColRule() {
+            return this.colRule;
+        }
+
+        public void setColRule(Map<String, ColDefineRule> colRule) {
+            this.colRule = colRule;
+        }
+    }
+
+}

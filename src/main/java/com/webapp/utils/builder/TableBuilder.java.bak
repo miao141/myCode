@@ -1,0 +1,118 @@
+package com.webapp.utils.builder;
+import com.webapp.utils.builder.MybatisBuilder;
+import com.webapp.utils.mybatis.ClassBuilder;
+import com.webapp.utils.mybatis.ClassCompiler;
+import java.io.InputStream;
+import java.util.Properties;
+import javax.sql.DataSource;
+import org.nutz.dao.entity.Entity;
+import org.nutz.dao.impl.NutDao;
+import org.nutz.dao.impl.SimpleDataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class TableBuilder<T> {
+    private static int comment = 0;
+    private static boolean snake = true;
+    private static String jdbcCfg = "";
+    private static boolean allNull = false;
+    private static int deci_length = 8;
+    private static int deci_precision = 4;
+    private static final Logger logger = LoggerFactory.getLogger((Class)TableBuilder.class);
+    private static SimpleDataSource ds;
+
+    public static int getComment() {
+        return comment;
+    }
+
+    public static void setComment(CMT cmt) {
+        comment = cmt.getIndex();
+    }
+
+    public static boolean isSnake() {
+        return snake;
+    }
+
+    public static void setSnake(boolean snake) {
+        TableBuilder.snake = snake;
+    }
+
+    public static String getJdbcCfg() {
+        return jdbcCfg;
+    }
+
+    public static void setJdbcCfg(String jdbcCfg) {
+        TableBuilder.jdbcCfg = jdbcCfg;
+    }
+
+    public static boolean isAllNull() {
+        return allNull;
+    }
+
+    public static void setAllNull(boolean allNull) {
+        TableBuilder.allNull = allNull;
+    }
+
+    public static int getDeciLength() {
+        return deci_length;
+    }
+
+    public static int getDeciPrecision() {
+        return deci_precision;
+    }
+
+    public static void setPrecision(Integer length, Integer precision) {
+        deci_length = length;
+        deci_precision = precision;
+    }
+
+    public static <T> ClassBuilder<T> of(Class<T> clz) {
+        return new ClassBuilder(clz);
+    }
+
+    public static void build(String jdbcCfg, String clzStr, String pkg, String name) {
+        if (ds == null) {
+            ds = TableBuilder.buildDataSource(jdbcCfg);
+        }
+        Class compile = ClassCompiler.compile((String)(pkg + "." + name), (String)clzStr);
+        NutDao dao = new NutDao((DataSource)ds);
+        dao.create(compile, true);
+    }
+
+    private static SimpleDataSource buildDataSource(String jdbcCfg) {
+        Properties jdbc = new Properties();
+        try {
+            jdbc.load(MybatisBuilder.class.getResourceAsStream("/" + jdbcCfg));
+        }
+        catch (Exception e) {
+            logger.error("read jdbcCfg error ", (Throwable)e);
+        }
+        SimpleDataSource ds = new SimpleDataSource();
+        try {
+            ds.setDriverClassName(jdbc.getProperty("driver"));
+        }
+        catch (ClassNotFoundException e) {
+            logger.error("load jdbc driver error ", (Throwable)e);
+        }
+        ds.setJdbcUrl(jdbc.getProperty("url"));
+        ds.setUsername(jdbc.getProperty("username"));
+        ds.setPassword(jdbc.getProperty("password"));
+        return ds;
+    }
+
+    public static enum CMT {
+        UP(1),
+        RIGHT(2);
+        
+        private int index;
+
+        private CMT(int index) {
+            this.index = index;
+        }
+
+        public int getIndex() {
+            return this.index;
+        }
+    }
+
+}

@@ -1,0 +1,310 @@
+
+${gg.setOverride(true)}
+<#include "/macro.include"/>
+<#assign className =
+table.className>
+<#assign classNameLower = className?uncap_first>
+<?xml version="1.0" encoding="UTF-8"?> 
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="${basepackage}.${className}Mapper">
+
+	<!-- Result Map 数据库映射到实体类 -->
+	<resultMap id="tableMapToModel" type="${basepackage}.model.${className}">
+		<#list table.columns as column>
+		${column.sqlName}<#if
+		column.columnNameLower != column.sqlName>
+		${column.columnNameLower}</#if><#if column_has_next>,</#if>
+
+		<result column="${column.sqlName}" property="${column.columnNameLower}" />
+
+		</#list>
+	</resultMap>
+
+	<!-- 所有条件分页 -->
+	<sql id="model">
+		<include refid="modelCount" />
+		${'${'}pageUtil.orderByCondition${'}'}
+		<if test="pageUtil.paging == true">
+			${'${'}pageUtil.limit${'}'}
+		</if>
+	</sql>
+
+
+	<!-- 总记录数 -->
+	<sql id="modelCount">
+		<where>
+			<choose>
+				<when test="pageUtil.like==true">
+					<include refid="andOtherAllLike" />
+				</when>
+				<otherwise>
+					<include refid="andOtherAll" />
+				</otherwise>
+			</choose>
+			${'${'}pageUtil.andCondition${'}'}
+		</where>
+		${'${'}pageUtil.queryCondition${'}'}
+	</sql>
+
+	<sql id="tbaleColumns">
+		<trim suffix="" suffixOverrides=",">
+			<#list table.columns as
+			column>${column.sqlName}<#if column_has_next>,</#if></#list>
+		</trim>
+	</sql>
+
+	<sql id="insertColumns">
+		<trim suffix="" suffixOverrides=",">
+			<#list table.columns as column>
+			<if
+				test="${column.columnNameLower} != null and ${column.columnNameLower} != '' ">
+				${column.sqlName}<#if column_has_next>,</#if>
+			</if>
+			</#list>
+
+		</trim>
+	</sql>
+
+	<sql id="insertParams">
+		<trim suffix="" suffixOverrides=",">
+			<#list table.columns as column>
+			<if
+				test="${column.columnNameLower} != null and ${column.columnNameLower} != '' ">
+				${'#{'}${column.columnNameLower}${'}'}<#if
+				column_has_next>,</#if>
+			</if>
+			</#list>
+		</trim>
+	</sql>
+
+	<sql id="updateParams">
+		<trim suffix="" suffixOverrides=",">
+			<#list table.columns as column>
+			<if test="${column.columnNameLower} != null and ${column.columnNameLower} != '' ">
+				${column.sqlName} = ${'#{'}${column.columnNameLower}${'}'}<#if
+				column_has_next>,</#if>
+			</if>
+			</#list>
+		</trim>
+	</sql>
+	<sql id="andOther">
+		<trim  suffixOverrides="," >
+	  	<#list table.columns as column>
+				<if test="${column.columnNameLower} != null ">
+					and ${column.sqlName} = ${'#{'}${column.columnNameLower}${'}'} 
+				</if>
+				</#list>
+		</trim>
+	</sql>
+	<sql id="andOtherAll">
+	  	<trim  suffixOverrides="," >
+	  	<#list table.columns as column>
+					<if test="${column.columnNameLower} != null and ${column.columnNameLower} != ''">
+						and ${column.sqlName} = ${'#{'}${column.columnNameLower}${'}'} 
+					</if>
+		</#list>
+	  </trim>
+	  </sql>
+	<!-- 模糊查询判断 -->
+  <sql id="andOtherAllLike">
+    <trim  suffixOverrides="," >
+		<#list table.columns as column>
+			<if test="${column.columnNameLower} != null and ${column.columnNameLower} != ''">
+				and ${column.sqlName} like &apos;${'#{'}${column.columnNameLower}${'}'} &apos;
+			</if>
+		</#list>
+    </trim>
+  </sql>
+	<!-- where 条件  -->
+	<sql id="where">
+		where 1=1
+	</sql>
+	  
+	<!-- columnKey  主键 列名称 ,视图获取不到主键 需要设置 -->
+	<sql id="columnKey">
+		<#list table.columns as column>
+			<#if column.pk>
+			and ${column.sqlName}=${'#{'}${column.columnNameLower}${'}'}
+			</#if>
+		</#list>
+	</sql>
+	
+	<!-- 自定义查询 -->
+	<sql id="sql">
+		<if test="sql != null and sql !=''">
+		${r'${sql}'}
+		</if>
+		<if test="sql == null || sql==''"> 
+		 select <include refid="tbaleColumns"/> from ${table.sqlName} <include refid="where"/>
+		</if>
+	</sql>
+	
+	<!-- 查询条件 -->
+	  <sql id="queryCondition">
+	    <if test="queryCondition != null and queryCondition != ''">
+	   	${r'${queryCondition}'}
+	    </if>
+	  </sql>
+	
+	<!-- 添加,插入记录   -->
+  <insert id="insert"  parameterType="${basepackage}.model.${className}" >
+    insert into ${table.sqlName} (<include refid="insertColumns"/>) values(<include refid="insertParams"/>);
+  </insert>
+  
+  <!-- 添加,SQL添加   -->
+  <insert id="insertBySql" parameterType="java.lang.String">
+   <include refid="sql"/>
+  </insert>
+  
+  <!-- 删除,主键删除   -->
+  <delete id="deleteByPrimaryKey" parameterType="${basepackage}.model.${className}">
+  delete from ${table.sqlName}<include refid="where"/><include refid="columnKey"/>
+  </delete>
+  
+  <!-- 删除,实体删除   -->
+  <delete id="deleteByEntity" parameterType="${basepackage}.model.${className}">
+  	delete from ${table.sqlName}<include refid="where"/><include refid="andOtherAll"/>
+  </delete>
+  
+  <!-- 删除,SQL删除   --> 
+  <delete id="deleteBySql" parameterType="java.lang.String">
+   <include refid="sql"/> 
+  </delete>
+  
+  <!-- 修改,主键更新  -->
+ <update id="updateByPrimaryKey" parameterType="${basepackage}.model.${className}" > 
+  	update ${table.sqlName} <set><include refid="updateParams"/></set><include refid="where"/><include refid="columnKey"/>
+  </update>
+  
+  <!-- 修改,SQL更新 -->
+  <update id="updateBySql" parameterType="java.lang.String">
+   <include refid="sql"/>
+  </update>
+  
+  <!-- 查询,主键查询   -->
+  <select id="selectByPrimaryKey"  resultMap="tableMapToModel" parameterType="java.lang.Object">
+  	select <include refid="tbaleColumns"/> from ${table.sqlName} <include refid="where"/> <include refid="columnKey"/>
+  </select>
+  
+  <!-- 查询,实体查询   -->
+  <select id="selectByEntiry"  resultMap="tableMapToModel" parameterType="${basepackage}.model.${className}">
+  	select <include refid="tbaleColumns"/> from ${table.sqlName} <include refid="where"/> <include refid="andOtherAll"/>
+  </select>
+  
+  <!-- 查询,SQL -->
+  <select id="selectBySql"  resultMap="tableMapToModel" parameterType="java.lang.String">
+  <include refid="sql"/>
+  </select>
+  
+  <!-- 查询 ,总行数,分页 ,模型 -->
+  <select id="selectByModelCount" resultType="java.lang.Integer"  parameterType="${basepackage}.model.${className}">
+  select count(1) from ${table.sqlName} <include refid="modelCount"/>
+  </select>
+  
+  <!-- 查询,排序,分页,模型  -->
+  <select id="selectByModel" resultMap="tableMapToModel"  parameterType="${basepackage}.model.${className}">
+  select <include refid="tbaleColumns"/>from ${table.sqlName} <include refid="model"/>
+  </select>
+  
+  <!-- 查询,总行数,Map -->
+  <select id="selectByMapCount" resultType="java.lang.Integer"  parameterType="java.util.Map">
+  select count(1) from ${table.sqlName} <include refid="where"/><include refid="andOtherAll"/>
+  	    ${r'${queryCondition}'}
+  <if test="andCondition !=null and andCondition !=''">
+   and ${r'${andCondition}'}
+  </if>
+  <if test="orderCondition != null and queryCondition != ''" >
+  order by ${r'${orderCondition}'}
+  </if>
+  </select>
+  
+  <!-- 查询,参数查询,Map --> 
+  <select id="selectByMap" resultMap="tableMapToModel"  parameterType="java.util.Map">
+  select <include refid="tbaleColumns"/>from ${table.sqlName} <include refid="where"/><include refid="andOtherAll"/>
+  ${r'${queryCondition}'}
+  <if test="andCondition !=null and andCondition !=''">
+  and ${r'${andCondition}'}
+ </if> 
+  <if test="orderCondition != null and queryCondition != ''" >
+   order by ${r'${orderCondition}'}
+   </if>
+  </select>
+  
+  <!-- 查询,总行数,Map分页 -->
+  <select id="selectByMapPagingCount" resultType="java.lang.Integer"  parameterType="java.util.Map">
+	  select count(0) from ${table.sqlName} <include refid="where"/><include refid="andOtherAll"/>
+	  ${r'${queryCondition}'}
+	  <if test="andCondition !=null and andCondition !=''">
+	  and ${r'${andCondition}'}
+	  </if>
+	  ${r'${pageUtil.queryCondition}'}
+	  ${r'${pageUtil.andCondition}'}
+  </select>
+  
+  <!-- 查询,参数查询,Map分页 -->
+  <select id="selectByMapPaging" resultMap="tableMapToModel"  parameterType="java.util.Map">
+  select <include refid="tbaleColumns"/>from ${table.sqlName} <include refid="where"/><include refid="andOtherAll"/>
+   ${r'${queryCondition}'}
+  <if test="andCondition !=null and andCondition !=''">
+   and  ${r'${andCondition}'}
+  </if>
+  <if test="orderCondition != null and queryCondition != ''" >
+  order by  ${r'${orderCondition}'}
+   </if>
+  	 ${r'${pageUtil.queryCondition}'}
+  	 ${r'${pageUtil.andCondition}'}
+  	 ${r'${pageUtil.orderByCondition}'}
+  	 ${r'${pageUtil.limit}'}
+  </select>
+  
+  <!--查询, 图表 -->
+  <select id="charts" parameterType="java.util.Map" resultType="java.util.Map">
+  <!-- '%Y-%m-%d %H:%i:%s' -->
+  	SELECT COUNT(*),DATE_FORMAT(createTime,'${r'${groupTimeFormat}'}') as createTime  FROM ${table.sqlName} 
+  <if test="startTimeFormat!=null and endTimeFormat!=null">
+  WHERE 
+  createTime&gt;=DATE_FORMAT(NOW(), '${r'${startTimeFormat}'}') AND createTime&lt;=DATE_FORMAT(NOW(), '${r'${endTimeFormat}'}')
+  </if> 
+  GROUP BY DATE_FORMAT(createTime,'${r'${groupTimeFormat}'}')
+  </select>
+  
+  <!--/////////////// 级联递归查询  一对多 ///////////////--> 
+  <resultMap type="${basepackage}.model.${className}" id="tableMapToModelChild" extends="tableMapToModel">
+    <!-- 一对一关联   注意 顺序       需要用时开启 -->
+   <!--  
+   <association property="Order_itemModel" column="parentId" select="getParent">
+   </association>
+   -->
+   <!-- 一对多关联  -->
+  <collection property="list${table.sqlName}Model" column="id" select="getChild">
+   <!-- 对象的属性 -->
+   </collection>
+  </resultMap>
+  <!--  
+  <select id="getParent" resultMap="tableMapToModelChild" parameterType="String">
+  SELECT * FROM ${table.sqlName} where id=${r'#{parentId}'}
+  </select>
+  -->
+  
+  
+  <select id="getChild" resultMap="tableMapToModelChild" parameterType="String">
+   SELECT * FROM ${table.sqlName} where parentId=${r'#{id}'}
+  </select>
+  
+  
+  <select id="selectByChild" resultMap="tableMapToModelChild"  parameterType="model.Order_itemModel">
+  SELECT <include refid="tbaleColumns"/>FROM ${table.sqlName}
+   <where>
+  <include refid="andOtherAll"/>
+  	 ${r'${pageUtil.andCondition}'}
+    </where>
+   ${r'${pageUtil.queryCondition}'}
+   ${r'${pageUtil.orderByCondition}'}
+   <if test="pageUtil.paging == true" >
+   ${r'${pageUtil.limit}'}
+   </if>
+  </select>
+  
+</mapper>

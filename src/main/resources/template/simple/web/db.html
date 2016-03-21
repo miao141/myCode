@@ -1,0 +1,85 @@
+<#include "/macro.include"/> <#assign className = table.className>
+<#assign classNameLower = className?uncap_first>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${table.sqlName} 数据字典</title>
+</head>
+<body>
+
+
+	<div class="container">
+		<h1 style="text-align: center;">${table.sqlName} 数据字典</h1>
+		<h3>${table.sqlName}</h3>
+
+		<table class="table table-hover table-bordered table-condensed">
+			<thead>
+				<tr>
+					<th>字段名</th>
+					<th>数据类型</th>
+					<th>默认值</th>
+					<th>允许非空</th>
+					<th>自动递增</th>
+					<th>备注</th>
+				</tr>
+			</thead>
+			<tbody>
+			 <#list table.columns as column>
+			   <tr>
+			    <td>${column.columnNameLower}</td>
+			    <td>${column.sqlTypeName?lower_case}(${column.size})</td>
+			    <td></td>
+			    <td></td>
+			     <td></td>
+			     ${column.javaType} ${column.columnNameLower};
+				<td>${column.columnAlias}</td>
+				</tr>
+			  </#list>
+				 
+				<tr>
+					<td>card_number</td>
+					<td>varchar(50)</td>
+					<td></td>
+					<td>NO</td>
+					<td></td>
+					<td>卡号</td>
+				</tr>
+				<tr>
+					<td>card_holder</td>
+					<td>varchar(50)</td>
+					<td></td>
+					<td>YES</td>
+					<td></td>
+					<td>持卡人</td>
+				</tr>
+				<tr>
+					<td>is_verified</td>
+					<td>varchar(1)</td>
+					<td></td>
+					<td>YES</td>
+					<td></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td>bank_name</td>
+					<td>varchar(50)</td>
+					<td></td>
+					<td>YES</td>
+					<td></td>
+					<td>银行名</td>
+				</tr>
+				<tr>
+					<td>bank_code</td>
+					<td>varchar(50)</td>
+					<td></td>
+					<td>YES</td>
+					<td></td>
+					<td>银行编号</td>
+				</tr>
+			</tbody>
+		</table>
+
+	</div>
+</body>
+</html>
